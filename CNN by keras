@@ -1,0 +1,125 @@
+###### 데이터 가공 부분이 어려움 ###########
+
+array_shape{keras}로 c(observales, nrow, ncol, channel) 형태로 만들어야 한다. 
+
+하기 예제에서는 ncol이 28*28로 이루어진 형태로 channel 한개짜리 MNIST 데이터임.
+
+행별로 불러들여서 array()함수로 28x28x1형태로 변형한 뒤 merge 후
+
+array_reshape()을 써서 keras 파일형태로 변형했음. 
+
+나를 헷갈리게 한 부분 input 파일을 c(28,28,1,1)이렇게 변형해서 쓴 Bharatendra Rai때문... c(28,28,1) 이게 맞는데
+오타이었던건가??
+
+
+
+require(keras)
+library(caret)
+#install_keras(tensorflow = "gpu") #gpu 버전 설치
+library(imager)
+#library(EBImage) #더이상 update 안하는 봄
+library(dplyr)
+
+rm(list = ls())
+gc()
+
+path = "E:\\COOLCSG\\R_project\\Yield\\CNN_keras\\"
+setwd(path)
+
+data.train = read.csv(paste0(path, "train.csv")) 
+data.test = read.csv(paste0(path, "test.csv"))
+
+data.train[,1] = as.factor(data.train[,1]) # y값 factor화
+
+# 축소
+data.train = data.train[1:100,]
+data.test = data.test[1:100,]
+
+train = data.train[,-1]
+
+train.2d = list()
+for (i in 1:nrow(train)) {
+  tmp = as.vector(train[i,]/255, mode = "double")
+  img = array(tmp, c(28,28,1)) #last index is channel
+  train.2d[[i]] =  img
+}
+
+#train.2d = combine(train.2d) #why use this combine function?? not work
+train.2d.resh = array_reshape(train.2d, c(nrow(data.train), 28,28,1))
+train.labels = to_categorical(data.train[,1])
+
+test = data.test
+
+test.2d = list()
+for (i in 1:nrow(test)) {
+  tmp = as.vector(test[i,]/255, mode = 'double')
+  img = array(tmp, c(28,28,1))
+  test.2d[[i]] = img
+}
+
+test.2d.resh = array_reshape(test.2d, c(nrow(data.test),28,28,1))
+#test.labels = to_categorical(data.test[,1]) #얘는 label이 안붙은 데이터임. 
+
+
+# Model
+model = keras_model_sequential()
+
+model %>% 
+          layer_conv_2d(filters = 10, 
+                        kernel_size = c(3,3),
+                        activation = 'relu',
+                        input_shape = c(28,28,1)) %>%  #first index is num of obervable,
+          layer_conv_2d(filters = 10,
+                        kernel_size = c(3,3),
+                        activation = 'relu') %>%
+          layer_max_pooling_2d(pool_size = c(2,2)) %>%
+          layer_dropout(rate = 0.25) %>%
+          layer_conv_2d(filters = 20,
+                        kernel_size = c(3,3),
+                        activation = 'relu') %>%
+          layer_conv_2d(filters = 20,
+                        kernel_size = c(3,3),
+                        activation = 'relu') %>%
+          layer_max_pooling_2d(pool_size = c(2,2)) %>%
+          layer_dropout(rate = 0.25) %>%
+          layer_flatten() %>%
+          layer_dense(units = 256, activation = 'relu') %>%
+          layer_dropout(rate = 0.25) %>%
+          layer_dense(units = ncol(train.labels), activation = 'softmax') %>%
+          compile(loss = 'categorical_crossentropy',
+                  optimizer = optimizer_sgd(lr = 0.01, decay = 1e-6, momentum = 0.9,nesterov = T),
+                  metrics = c('accuracy'))
+          
+summary(model)
+
+history = model %>%
+                    fit(train.2d.resh, train.labels,
+                        epochs = 10,
+                        batch_size = 32,
+                        validation_split = 0.2)
+
+##########################################################################
+# dir.create(file.path("./images/"), showWarnings = FALSE)
+# 
+# for(i in 0:9) {
+#   imgPath <- sprintf("./images/%d", i)
+#   dir.create(file.path(imgPath), showWarnings = FALSE)
+# }
+# 
+# for(i in 1:nrow(data.train)) {
+#   digit <- data.train[i,1]
+#   tmp <- as.vector(data.train[i,-1]/255, mode = "double")
+#   img <- array(tmp, c(28,28,1,1))
+#   num <- as.cimg(img)
+#   
+#   # print(paste0("digit : ", digit))
+#   # print(sprintf("./images/%d/%05d.png", digit, i))
+#   digit = as.numeric(digit)
+#   fileName <- sprintf("./images/%d/%05d.png", (digit - 1), i)
+#   
+#   save.image(im = num, file = fileName)
+#   
+#   # proc <- sprintf("Process: %10.6f%%", 100.0*i/(nrow(data.train)))
+#   # print(proc)
+# }
+# print("loading complete!")

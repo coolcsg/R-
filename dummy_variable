@@ -1,0 +1,17 @@
+## one hot encoding ##
+
+make_dummies <- function(v, prefix = '') {
+  s <- sort(unique(v))
+  d <- outer(v, s, function(v, s) 1L * (v == s))
+  colnames(d) <- paste0(prefix, s)
+  d
+}
+
+dummy <- NULL
+for (i in aa) {
+  print(i)
+  temp <- make_dummies(data[,i], prefix="")  
+  dummy <- cbind(dummy, temp)
+}
+
+data.v1 <- cbind(data[,-aa], dummy)

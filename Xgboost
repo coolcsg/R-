@@ -1,0 +1,48 @@
+library(xgboost)
+
+path <- dirname( rstudioapi::getSourceEditorContext()$path )
+
+setwd(path)
+
+data_train <- read.csv(file = "train.csv", stringsAsFactors = FALSE)
+
+data_test <- read.csv(file = "test.csv", stringsAsFactors = FALSE)
+
+data_train <- data_train[,-which(colnames(data_train) %in% "id")]
+
+
+sapply(data_train, function(x) print( class(x)) )
+
+data_train$date <- as.Date(data_train$date)
+
+# train_date <- substr(data_train$date, 1, 8)
+
+train_date <- as.numeric(data_train$date)
+
+data_train$date <- train_date
+
+# sapply(data_train, function(x) print( sum(is.na(x)) ) )
+
+
+dtrain.m <- as.matrix(data_train[, -which(colnames(data_train) %in% "price")])
+
+dtrain.m <- dtrain.m[,-which(colnames(dtrain.m) %in% "date")]              # 시계열 데이터 제거
+
+
+dtrain.label <- normalize( as.matrix(data_train$price) )
+dtrain <- xgb.DMatrix(dtrain.m, label = dtrain.label )
+
+
+# cv_folds <- KFold(data_train$price, nfolds = 5, stratified = TRUE, seed = 0) #베이지안 함수였나?
+
+xgmodel <- xgboost(data = dtrain, label = dtrain.label, max.depth = 3, eta = 1, nthread = 4, nrounds = 1000, objective = "reg:linear")
+
+
+
+
+normalize <- function(x){
+  max <- max(x)
+  min <- min(x)
+  tmp <- (x - min)/(max - min)
+  return(tmp)
+}

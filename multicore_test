@@ -1,0 +1,68 @@
+################ 병렬 처리 test  #####################
+
+library(foreach)
+library(parallel)
+if (!require(doParallel)) {
+  install.packages("doParallel")
+}
+
+
+nc = ncol(Data)
+nc2 = round(nc/2)
+print(nc)
+print(nc2)
+
+
+# 코어 개수 획득
+numC <- parallel::detectCores() - 2
+
+# 클러스터 초기화
+myCluster <- makeCluster(numC)
+
+# 변수 등록
+clusterExport(myCluster, "Data")
+
+
+
+
+# CPU 병렬 처리
+foreach(i = 2:nc2) %:% 
+  foreach(j = (i+1):nc) %do% {
+      if ((j%%1000) ==0) {
+        print(paste0("i : ", i, "  j : ", j))
+      }
+      fit <- aov(Data[,1] ~ Data[,i]*Data[,j], data = Data)
+      p.value = summary(fit)[[1]][["Pr(>F)"]] ## 교호작용 계수의 p.value
+      qq <- Data[,i]*Data[,j]
+      qqq <- fit$coefficients[1] + fit$coefficients[2]*Data[,i] + fit$coefficients[3]*Data[,j] + 
+        fit$coefficients[4]*Data[,i]*Data[,j];
+      qqq_pvalue = tryCatch(shapiro.test(qqq)$p.value, error=function(x)NULL)
+      if(!is.null(qqq_pvalue)){
+        # boxdata1 = Data[,i]
+        # boxdata2 = Data[,j]
+        # bd1 = boxplot(Data[,i])
+        # bd2 = boxplot(Data[,j])
+        cr = cor.test(qqq, Data[,1])$estimate
+        fn = paste0(colnames(Data)[i], "___", colnames(Data)[j])
+        #& (p.value[1] <= 0.05) & (p.value[2] <= 0.05) & (p.value[3] <= 0.05)
+        if ( (qqq_pvalue >= plimit) & (cr >= cr.limit) & 
+             (fit$coefficients[3] >= (fit$coefficients[1] + fit$coefficients[2])/4)
+             & (length(qqq) >= 120) ) {
+          png(filename = paste(fn, ".png"), width = 1200, height = 600)
+          par(mar = c(2,2,2,2))
+          layout(matrix(c(1,2,1,3),2,byrow = T))
+          plot(qq, Data[,1], main = paste(colnames(Data)[i], "\n", colnames(Data)[j] ), ylab = "uu", xlab = fn,  type ='p')
+          mtext(text = 'uu', side=2,line=2)
+          mtext(text = cr, side = 3, line=2)
+          abline(lm(Data[,1] ~ qq))
+          plot(GLS_ID, qq, ylab = '인자', cex = cx, mgp=c(100,0,0))
+          mtext(text = '인자', side=2,line=2)
+          lines(GLS_ID, qq, type='l', col = 'blue')
+          plot(GLS_ID, Data[,1], ylab = '잔상', cex = cx, mgp=c(100,0,0))
+          mtext(text = '잔상', side=2,line=2)
+          lines(GLS_ID, Data[,1], type='l', col = 'red')
+          dev.off()  
+        }  
+      }
+}
+stopCluster(myCluster)
